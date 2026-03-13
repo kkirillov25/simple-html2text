@@ -110,13 +110,13 @@ class Html2Text {
 	public static function processWhitespaceNewlines(string $text): string {
 
 		// remove excess spaces around tabs
-		$text = preg_replace("/ *\t */im", "\t", $text);
+//		$text = preg_replace("/ *\t */im", "\t", $text);
 
 		// remove leading whitespace
-		$text = ltrim($text);
+//		$text = ltrim($text);
 
 		// remove leading spaces on each line
-		$text = preg_replace("/\n[ \t]*/im", "\n", $text);
+//		$text = preg_replace("/\n[ \t]*/im", "\n", $text);
 
 		// convert non-breaking spaces to regular spaces to prevent output issues,
 		// do it here so they do NOT get removed with other leading spaces, as they
@@ -124,16 +124,16 @@ class Html2Text {
 		$text = self::renderText($text);
 
 		// remove trailing whitespace
-		$text = rtrim($text);
+//		$text = rtrim($text);
 
 		// remove trailing spaces on each line
-		$text = preg_replace("/[ \t]*\n/im", "\n", $text);
+//		$text = preg_replace("/[ \t]*\n/im", "\n", $text);
 
 		// unarmor pre blocks
-		$text = self::fixNewLines($text);
+//		$text = self::fixNewLines($text);
 
 		// remove unnecessary empty lines
-		$text = preg_replace("/\n\n\n*/im", "\n\n", $text);
+//		$text = preg_replace("/\n\n\n*/im", "\n\n", $text);
 
 		return $text;
 	}
@@ -222,7 +222,7 @@ class Html2Text {
 	 * by a browser.
 	 */
 	private static function renderText(string $text): string {
-		$text = str_replace(self::nbspCodes(), " ", $text);
+//		$text = str_replace(self::nbspCodes(), " ", $text);
 		$text = str_replace(self::zwnjCodes(), "", $text);
 		return $text;
 	}
