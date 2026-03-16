@@ -108,7 +108,12 @@ class Html2Text {
 	 * @return string the fixed text
 	 */
 	public static function processWhitespaceNewlines(string $text): string {
+		// remove excess spaces around tabs
+		$text = preg_replace("/ *\t */im", "\t", $text);
 		$text = self::renderText($text);
+
+		// remove leading spaces on each line (preserve tabs for table cells)
+		$text = preg_replace("/\n */im", "\n", $text);
 
 		// remove trailing spaces on each line
 		$text = preg_replace("/[ \t]*\n/im", "\n", $text);
@@ -205,9 +210,7 @@ class Html2Text {
 	 * by a browser.
 	 */
 	private static function renderText(string $text): string {
-//		$text = str_replace(self::nbspCodes(), " ", $text);
-		$text = str_replace(self::zwnjCodes(), "", $text);
-		return $text;
+		return str_replace(self::zwnjCodes(), "", $text);
 	}
 
 	private static function nextChildName(?\DOMNode $node): ?string {
