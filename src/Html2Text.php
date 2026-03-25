@@ -239,9 +239,9 @@ class Html2Text {
 	}
 
 	/** @param array<string, bool | string> $options */
-	private static function iterateOverNode(\DOMNode $node, ?string $prevName, bool $in_pre, bool $is_office_document, array $options): string {
+	private static function iterateOverNode(\DOMNode $node, ?string $prevName, bool $in_pre, bool $is_office_document, array $options, int $listDepth = 0): string {
 		if ($node instanceof \DOMText) {
-		  // Replace whitespace characters with a space (equivilant to \s)
+			// Replace whitespace characters with a space (equivilant to \s)
 			if ($in_pre) {
 				$text = "\n" . trim(self::renderText($node->wholeText), "\n\r\t ") . "\n";
 
@@ -292,18 +292,21 @@ class Html2Text {
 			case "h4":
 			case "h5":
 			case "h6":
-			case "ol":
-			case "ul":
 			case "pre":
 				// add two newlines
 				$output = "\n\n";
 				break;
 
+			case "ol":
+			case "ul":
+				$output = ($listDepth > 0) ? "\n" : "\n\n";
+				break;
+
 			case "td":
 			case "th":
 				// add tab char to separate table fields
-			   $output = "\t";
-			   break;
+				$output = "\t";
+				break;
 
 			case "p":
 				// Microsoft exchange emails often include HTML which, when passed through
@@ -337,7 +340,8 @@ class Html2Text {
 				break;
 
 			case "li":
-				$output = "- ";
+				$indent = str_repeat("\t", max(0, $listDepth - 1));
+				$output = $indent . "- ";
 				break;
 
 			default:
@@ -358,9 +362,14 @@ class Html2Text {
 			$parts = [];
 			$trailing_whitespace = 0;
 
+			$childListDepth = $listDepth;
+			if ($name === 'ol' || $name === 'ul') {
+				$childListDepth = $listDepth + 1;
+			}
+
 			while ($n != null) {
 
-				$text = self::iterateOverNode($n, $previousSiblingName, $in_pre || $name == 'pre', $is_office_document, $options);
+				$text = self::iterateOverNode($n, $previousSiblingName, $in_pre || $name == 'pre', $is_office_document, $options, $childListDepth);
 
 				// Pass current node name to next child, as previousSibling does not appear to get populated
 				if ($n instanceof \DOMDocumentType
@@ -478,8 +487,8 @@ class Html2Text {
 				// does the next node require additional whitespace?
 				switch ($nextName) {
 					case "h1": case "h2": case "h3": case "h4": case "h5": case "h6":
-						$output .= "\n";
-						break;
+					$output .= "\n";
+					break;
 				}
 				break;
 
@@ -488,7 +497,7 @@ class Html2Text {
 				if ($node->getAttribute("title")) {
 					// @phpstan-ignore-next-line
 					$output = "[" . $node->getAttribute("title") . "]";
-				// @phpstan-ignore-next-line
+					// @phpstan-ignore-next-line
 				} elseif ($node->getAttribute("alt")) {
 					// @phpstan-ignore-next-line
 					$output = "[" . $node->getAttribute("alt") . "]";
