@@ -326,6 +326,19 @@ class Html2Text {
 					break;
 				}
 
+				// @phpstan-ignore-next-line
+				if ($is_office_document && str_contains($node->getAttribute('class') ?? '', 'MsoListParagraph')) {
+					// @phpstan-ignore-next-line
+					$style = $node->getAttribute('style') ?? '';
+					if (preg_match('/mso-list:\s*\w+\s+level(\d+)/i', $style, $matches)) {
+						$level = (int) $matches[1];
+						$indent = str_repeat(self::LIST_INDENT_MARKER, max(0, $level - 1));
+						$output = $indent . "- ";
+						$name = 'li';
+						break;
+					}
+				}
+
 				// add two lines
 				$output = "\n\n";
 				break;
@@ -346,6 +359,14 @@ class Html2Text {
 			case "li":
 				$indent = str_repeat(self::LIST_INDENT_MARKER, max(0, $listDepth - 1));
 				$output = $indent . "- ";
+				break;
+
+			case "span":
+				// @phpstan-ignore-next-line
+				if ($is_office_document && preg_match('/mso-list\s*:\s*Ignore/i', $node->getAttribute('style') ?? '')) {
+					return "";
+				}
+				$output = "";
 				break;
 
 			default:
