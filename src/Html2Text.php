@@ -4,6 +4,8 @@ namespace Soundasleep;
 
 class Html2Text {
 
+	private const LIST_INDENT_MARKER = "\x00";
+
 	/** @return array<string, bool | string> */
 	public static function defaultOptions(): array {
 		return [
@@ -64,6 +66,8 @@ class Html2Text {
 
 		// process output for whitespace/newlines
 		$output = self::processWhitespaceNewlines($output);
+
+		$output = str_replace(self::LIST_INDENT_MARKER, "  ", $output);
 
 		return $output;
 	}
@@ -340,7 +344,7 @@ class Html2Text {
 				break;
 
 			case "li":
-				$indent = str_repeat("\t", max(0, $listDepth - 1));
+				$indent = str_repeat(self::LIST_INDENT_MARKER, max(0, $listDepth - 1));
 				$output = $indent . "- ";
 				break;
 
