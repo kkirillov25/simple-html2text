@@ -122,7 +122,8 @@ class Html2Text {
 		// [Fork] Restored from original: strip leading whitespace from the output.
 		// DOMDocument preserves whitespace text nodes between tags (e.g. "\n\t" between
 		// <div> and <ol>), which produce unwanted leading spaces in the final text.
-		$text = ltrim($text);
+		// Tabs excluded from mask to preserve table cell separators (\t from <td> handler).
+		$text = ltrim($text, " \n\r\x0B");
 
 		// [Fork] Original: /\n[ \t]*/  — stripped both spaces and tabs from line starts.
 		// Changed to /\n */ — only strip spaces, preserve leading tabs (used for table cells).
@@ -319,11 +320,12 @@ class Html2Text {
 			case "ol":
 			case "ul":
 				// [Fork] Original always used "\n\n".
-				// Office docs: Outlook splits one logical list into multiple <ol>/<ul> elements,
-				// so no extra newlines needed — items manage their own line breaks.
+				// Office docs at top level (listDepth=0): Outlook splits one logical list into
+				// multiple <ol>/<ul> elements, so no extra newlines needed.
+				// Office docs nested (listDepth>0): real nested lists need "\n" before sub-items.
 				// Non-office: nested lists get "\n", top-level get "\n\n" for visual separation.
 				if ($is_office_document) {
-					$output = "";
+					$output = $listDepth > 0 ? "\n" : "";
 				} elseif ($listDepth > 0) {
 					$output = "\n";
 				} else {
@@ -347,7 +349,14 @@ class Html2Text {
 				// @phpstan-ignore-next-line
 				if ($is_office_document && $node->getAttribute('class') == 'MsoNormal') {
 					$output = "";
-					$name = 'br';
+					// [Fork] Inside table cells: use 'div' name (no suffix in end whitespace)
+					// so cells stay on the same line, separated by tabs from <td> handler.
+					// @phpstan-ignore-next-line
+					if ($node->parentNode && in_array(strtolower($node->parentNode->nodeName), ['td', 'th'])) {
+						$name = 'div';
+					} else {
+						$name = 'br';
+					}
 					break;
 				}
 
@@ -565,7 +574,11 @@ class Html2Text {
 				break;
 
 			case "li":
-				$output .= "\n";
+				// [Fork] Only add newline if one isn't already present (e.g. from nested list).
+				// Prevents blank lines between the last nested item and the next sibling item.
+				if (!str_ends_with($output, "\n")) {
+					$output .= "\n";
+				}
 				break;
 
 			case "blockquote":
