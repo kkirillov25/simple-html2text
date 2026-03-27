@@ -72,10 +72,6 @@ class Html2Text {
 		// [Fork] Convert indentation markers to 2 spaces per nesting level, after whitespace processing
 		$output = str_replace(self::LIST_INDENT_MARKER, "  ", $output);
 
-		// [Fork] Moved from renderText() to here: nbsp → regular space AFTER whitespace processing,
-		// so that nbsp-based indentation (e.g. Outlook's &nbsp; tabs) survives the regex cleanup
-		$output = str_replace(self::nbspCodes(), " ", $output);
-
 		return $output;
 	}
 
@@ -123,9 +119,14 @@ class Html2Text {
 		$text = preg_replace("/ *\t */im", "\t", $text);
 		$text = self::renderText($text);
 
+		// [Fork] Restored from original: strip leading whitespace from the output.
+		// DOMDocument preserves whitespace text nodes between tags (e.g. "\n\t" between
+		// <div> and <ol>), which produce unwanted leading spaces in the final text.
+		$text = ltrim($text);
+
 		// [Fork] Original: /\n[ \t]*/  — stripped both spaces and tabs from line starts.
 		// Changed to /\n */ — only strip spaces, preserve leading tabs (used for table cells).
-		// Also removed ltrim()/rtrim() of entire text (original trimmed the whole output here).
+		// Original rtrim() removed — trailing cleanup handled by the caller.
 		$text = preg_replace("/\n */im", "\n", $text);
 
 		// remove trailing spaces on each line
@@ -223,8 +224,9 @@ class Html2Text {
 	 * This is to match our goal of rendering documents as they would be rendered
 	 * by a browser.
 	 */
-	// [Fork] Removed nbsp → space conversion from here (moved to end of convert()).
-	// During processing, nbsp (\xc2\xa0) stays intact so it isn't stripped by whitespace regexes.
+	// [Fork] Removed nbsp → space conversion entirely. Non-breaking spaces (\xc2\xa0) stay in output
+	// to match the old library's behavior: they survive ltrim() in cleanBodyText, preserving
+	// leading blank lines from &nbsp; paragraphs (e.g. Outlook emails).
 	private static function renderText(string $text): string {
 		return str_replace(self::zwnjCodes(), "", $text);
 	}
@@ -316,8 +318,17 @@ class Html2Text {
 
 			case "ol":
 			case "ul":
-				// [Fork] Original always used "\n\n". Changed: nested lists get single newline
-				$output = ($listDepth > 0) ? "\n" : "\n\n";
+				// [Fork] Original always used "\n\n".
+				// Office docs: Outlook splits one logical list into multiple <ol>/<ul> elements,
+				// so no extra newlines needed — items manage their own line breaks.
+				// Non-office: nested lists get "\n", top-level get "\n\n" for visual separation.
+				if ($is_office_document) {
+					$output = "";
+				} elseif ($listDepth > 0) {
+					$output = "\n";
+				} else {
+					$output = "\n\n";
+				}
 				break;
 
 			case "td":
