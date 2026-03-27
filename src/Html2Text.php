@@ -4,6 +4,8 @@ namespace Soundasleep;
 
 class Html2Text {
 
+	// [Fork] Null-byte placeholder for list indentation. Survives processWhitespaceNewlines
+	// (which strips regular spaces), then gets replaced with 2 spaces at the end of convert().
 	private const LIST_INDENT_MARKER = "\x00";
 
 	/** @return array<string, bool | string> */
@@ -67,7 +69,12 @@ class Html2Text {
 		// process output for whitespace/newlines
 		$output = self::processWhitespaceNewlines($output);
 
+		// [Fork] Convert indentation markers to 2 spaces per nesting level, after whitespace processing
 		$output = str_replace(self::LIST_INDENT_MARKER, "  ", $output);
+
+		// [Fork] Moved from renderText() to here: nbsp → regular space AFTER whitespace processing,
+		// so that nbsp-based indentation (e.g. Outlook's &nbsp; tabs) survives the regex cleanup
+		$output = str_replace(self::nbspCodes(), " ", $output);
 
 		return $output;
 	}
@@ -116,7 +123,9 @@ class Html2Text {
 		$text = preg_replace("/ *\t */im", "\t", $text);
 		$text = self::renderText($text);
 
-		// remove leading spaces on each line (preserve tabs for table cells)
+		// [Fork] Original: /\n[ \t]*/  — stripped both spaces and tabs from line starts.
+		// Changed to /\n */ — only strip spaces, preserve leading tabs (used for table cells).
+		// Also removed ltrim()/rtrim() of entire text (original trimmed the whole output here).
 		$text = preg_replace("/\n */im", "\n", $text);
 
 		// remove trailing spaces on each line
@@ -134,6 +143,7 @@ class Html2Text {
 	 */
 	public static function isOfficeDocument(string $html): bool {
 		return strpos($html, "urn:schemas-microsoft-com:office") !== false
+			// [Fork] Added MsoNormal detection — some Outlook emails lack the urn:schemas namespace
 			|| strpos($html, "MsoNormal") !== false;
 	}
 
@@ -213,6 +223,8 @@ class Html2Text {
 	 * This is to match our goal of rendering documents as they would be rendered
 	 * by a browser.
 	 */
+	// [Fork] Removed nbsp → space conversion from here (moved to end of convert()).
+	// During processing, nbsp (\xc2\xa0) stays intact so it isn't stripped by whitespace regexes.
 	private static function renderText(string $text): string {
 		return str_replace(self::zwnjCodes(), "", $text);
 	}
@@ -243,6 +255,7 @@ class Html2Text {
 	}
 
 	/** @param array<string, bool | string> $options */
+	// [Fork] Added $listDepth parameter to track nesting level for list indentation
 	private static function iterateOverNode(\DOMNode $node, ?string $prevName, bool $in_pre, bool $is_office_document, array $options, int $listDepth = 0): string {
 		if ($node instanceof \DOMText) {
 			// Replace whitespace characters with a space (equivilant to \s)
@@ -303,6 +316,7 @@ class Html2Text {
 
 			case "ol":
 			case "ul":
+				// [Fork] Original always used "\n\n". Changed: nested lists get single newline
 				$output = ($listDepth > 0) ? "\n" : "\n\n";
 				break;
 
@@ -326,6 +340,8 @@ class Html2Text {
 					break;
 				}
 
+				// [Fork] Outlook uses <p class="MsoListParagraph" style="mso-list:level2"> for sub-items
+				// instead of nested <ol>/<li>. Extract level from mso-list and render as list item.
 				// @phpstan-ignore-next-line
 				if ($is_office_document && str_contains($node->getAttribute('class') ?? '', 'MsoListParagraph')) {
 					// @phpstan-ignore-next-line
@@ -357,11 +373,14 @@ class Html2Text {
 				break;
 
 			case "li":
+				// [Fork] Original: $output = "- " (no indentation). Added depth-based indent.
 				$indent = str_repeat(self::LIST_INDENT_MARKER, max(0, $listDepth - 1));
 				$output = $indent . "- ";
 				break;
 
 			case "span":
+				// [Fork] Skip Outlook auto-generated numbering spans ("1.1.", "2.1.1.").
+				// Their content is decorative; real structure comes from mso-list level detection.
 				// @phpstan-ignore-next-line
 				if ($is_office_document && preg_match('/mso-list\s*:\s*Ignore/i', $node->getAttribute('style') ?? '')) {
 					return "";
@@ -387,6 +406,7 @@ class Html2Text {
 			$parts = [];
 			$trailing_whitespace = 0;
 
+			// [Fork] Track list nesting depth: increment when entering <ol> or <ul>
 			$childListDepth = $listDepth;
 			if ($name === 'ol' || $name === 'ul') {
 				$childListDepth = $listDepth + 1;
@@ -422,6 +442,8 @@ class Html2Text {
 
 			// suppress last br tag inside a node list if follows text
 			$last_name = array_pop($previousSiblingNames);
+			// [Fork] Added "$name !== 'br'": for MsoNormal paragraphs, $name is overridden to 'br',
+			// so trailing <br> inside them is a meaningful Shift+Enter and must not be suppressed.
 			if ($last_name === 'br' && $name !== 'br') {
 				$last_name = array_pop($previousSiblingNames);
 				if ($last_name === '#text') {
