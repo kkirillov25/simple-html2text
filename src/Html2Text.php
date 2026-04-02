@@ -462,9 +462,21 @@ class Html2Text {
 
 			// suppress last br tag inside a node list if follows text
 			$last_name = array_pop($previousSiblingNames);
-			// [Fork] Added "$name !== 'br'": for MsoNormal paragraphs, $name is overridden to 'br',
-			// so trailing <br> inside them is a meaningful Shift+Enter and must not be suppressed.
-			if ($last_name === 'br' && $name !== 'br') {
+			// [Fork] Only suppress for block-level containers whose end-whitespace already
+			// adds a newline (p, div, h1-h6, pre, li, blockquote, td, th, tr).
+			// For inline formatting elements (b, i, u, em, strong, span, etc.) there is no
+			// end-whitespace newline, so the <br> is the only newline source — suppressing
+			// it loses meaningful line breaks. DOMDocument may place <br /> as the last
+			// child of an inline element (e.g. <b>text<br/></b>) and the old code would
+			// silently eat that newline, causing "BoldItalic" instead of "Bold\nItalic".
+			// MsoNormal paragraphs ($name='br') are also covered: 'br' is not in the list.
+			$blockContainers = [
+				'p', 'div',
+				'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'pre',
+				'li', 'blockquote',
+				'td', 'th', 'tr',
+			];
+			if ($last_name === 'br' && in_array($name, $blockContainers)) {
 				$last_name = array_pop($previousSiblingNames);
 				if ($last_name === '#text') {
 					array_pop($parts);
