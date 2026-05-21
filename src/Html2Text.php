@@ -53,6 +53,8 @@ class Html2Text {
 		if ($is_office_document) {
 			// remove office namespace
 			$html = str_replace(["<o:p>", "</o:p>"], "", $html);
+			// Remove ALL MSO conditional comment tags: <![if ...]> and <![endif]>
+			$html = preg_replace('/<!\[(if|endif)[^\]]*\]>/i', '', $html);
 		}
 
 		$html = self::fixNewlines($html);
